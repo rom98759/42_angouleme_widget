@@ -49,7 +49,7 @@ stylesheet.css -> style du widget
 
 ```bash
 git clone https://github.com/rom98759/42_angouleme_widget.git
-cd 42_angouleme_widget/angouleme42@rcaillie
+cd 42_angouleme_widget
 chmod +x install.sh
 ./install.sh
 ```
