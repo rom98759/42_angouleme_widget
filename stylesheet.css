@@ -1,0 +1,38 @@
+.pulse42-indicator {
+    padding: 0 8px;
+    margin: 0 4px 0 0;
+    border-radius: 999px;
+    background-color: rgba(18, 37, 28, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pulse42-indicator:hover {
+    background-color: rgba(18, 38, 29, 0.9);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.pulse42-panel-box {
+    padding: 3px 2px;
+}
+
+.pulse42-panel-label {
+    font-weight: 700;
+    color: #f5f8f4;
+    font-size: 11px;
+    letter-spacing: 0.2px;
+}
+
+.pulse42-menu-key,
+.pulse42-menu-value {
+    color: #d7e6da;
+    font-size: 11px;
+}
+
+.pulse42-menu-row {
+    min-width: 170px;
+}
+
+.pulse42-menu-key,
+.pulse42-menu-value {
+    font-weight: 600;
+}

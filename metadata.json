@@ -1,0 +1,10 @@
+{
+    "uuid": "angouleme42@rcaillie",
+    "name": "42 Angouleme Widget",
+    "description": "Affiche le temps de presence 42 en temps reel avec liens utiles Angouleme.",
+    "url": "https://github.com/rom98759/42_angouleme_widget.git",
+    "shell-version": [
+        "42"
+    ],
+    "version": 1
+}

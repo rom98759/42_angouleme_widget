@@ -1,0 +1,9 @@
+# Secrets
+config.json
+
+# Local artifacts
+*.log
+*.zip
+
+# Editor
+.vscode/
