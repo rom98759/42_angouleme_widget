@@ -12,20 +12,20 @@ let menuRows = {};
 
 const LINKS = [
     {
-        label: 'Cluster Map',
-        url: 'https://cluster-map.42angouleme.fr/',
+        label: 'Profile Intra',
+        url: 'https://profile-v3.intra.42.fr/',
     },
     {
-        label: 'Docs 42 Angouleme',
-        url: 'https://docs.42angouleme.fr/',
+        label: 'Cluster Map',
+        url: 'https://cluster-map.42angouleme.fr/',
     },
     {
         label: 'Rusty',
         url: 'https://rusty.42angouleme.fr/',
     },
     {
-        label: 'Profile Intra',
-        url: 'https://profile-v3.intra.42.fr/',
+        label: 'Docs 42 Angouleme',
+        url: 'https://docs.42angouleme.fr/',
     },
 ];
 
@@ -352,6 +352,12 @@ function buildMenu() {
 
     for (const link of LINKS)
         addLinkItem(link.label, link.url);
+
+    indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+    const githubItem = new PopupMenu.PopupMenuItem('GitHub');
+    githubItem.connect('activate', () => openUrl('https://github.com/rom98759/42_angouleme_widget'));
+    indicator.menu.addMenuItem(githubItem);
 }
 
 function refreshMenu() {
