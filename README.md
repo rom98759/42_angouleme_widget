@@ -1,8 +1,15 @@
 # 42 Angouleme Widget
 
-Extension GNOME Shell pour afficher le temps de presence 42 dans le panel, avec refresh OAuth automatique.
+Extension GNOME Shell pour afficher le temps de presence 42 dans le panel.
 
 UUID GNOME: `angouleme42@rcaillie`
+
+## Preview
+
+<img width="404" height="40" alt="image" src="https://github.com/user-attachments/assets/1b114b3c-1150-4fe7-829e-906d7a2a7e7c" />
+
+[Screencast from 04-02-2026 04:04:31 PM.webm](https://github.com/user-attachments/assets/5eafb606-08db-4359-b140-3a3f5d1e5f76)
+
 
 ## Installation en 1 parcours
 
@@ -70,6 +77,9 @@ chmod 600 ~/.config/angouleme42-widget/config.json
 > [!WARNING]
 > Ne partage jamais tes tokens ou secrets. Ne les mets pas sur GitHub.
 > Remplace `u-s4t2ud-XXX` et `s-s4t2ud-XXX` par tes vrais client_id et client_secret.
+
+<img width="1741" height="786" alt="image" src="https://github.com/user-attachments/assets/a8f14a1c-e4f0-4f75-8bf1-b7f901e2ee0d" />
+
 
 1. Ouvre:
 
