@@ -38,7 +38,22 @@ let fortyTwoCache = {
     beginAtMs: null,
     endAtMs: null,
     updatedAt: 0,
+    dayKey: null,
 };
+
+function getLocalDayKey(timestampMs = Date.now()) {
+    const date = new Date(timestampMs);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getStartOfLocalDayMs(timestampMs = Date.now()) {
+    const date = new Date(timestampMs);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+}
 
 function getPulse42ConfigPath() {
     return GLib.build_filenamev([
@@ -240,6 +255,17 @@ function clearFortyTwoCache() {
     fortyTwoCache.beginAtMs = null;
     fortyTwoCache.endAtMs = null;
     fortyTwoCache.updatedAt = Date.now();
+    fortyTwoCache.dayKey = getLocalDayKey();
+}
+
+function isFortyTwoCacheStale() {
+    if (!fortyTwoCache.updatedAt)
+        return true;
+
+    if (fortyTwoCache.dayKey !== getLocalDayKey())
+        return true;
+
+    return Date.now() - fortyTwoCache.updatedAt > FORTY_TWO_REFRESH_INTERVAL;
 }
 
 function updateFortyTwoCache() {
@@ -280,6 +306,7 @@ function updateFortyTwoCache() {
         fortyTwoCache.beginAtMs = beginAt;
         fortyTwoCache.endAtMs = endAt;
         fortyTwoCache.updatedAt = Date.now();
+        fortyTwoCache.dayKey = getLocalDayKey(fortyTwoCache.updatedAt);
     } catch (error) {
         clearFortyTwoCache();
     }
@@ -289,8 +316,18 @@ function getFortyTwoText() {
     if (!fortyTwoCache.beginAtMs)
         return '42 N/A';
 
-    const endMs = fortyTwoCache.endAtMs === null ? Date.now() : fortyTwoCache.endAtMs;
-    return `42 ${formatDuration((endMs - fortyTwoCache.beginAtMs) / 1000)}`;
+    const nowMs = Date.now();
+    const dayStartMs = getStartOfLocalDayMs(nowMs);
+    const endMs = fortyTwoCache.endAtMs === null ? nowMs : Math.min(fortyTwoCache.endAtMs, nowMs);
+
+    if (endMs <= dayStartMs)
+        return '42 N/A';
+
+    const startMs = Math.max(fortyTwoCache.beginAtMs, dayStartMs);
+    if (endMs <= startMs)
+        return '42 N/A';
+
+    return `42 ${formatDuration((endMs - startMs) / 1000)}`;
 }
 
 function createDetailRow(title, value) {
@@ -372,7 +409,7 @@ function updateWidget() {
         if (!indicator)
             return false;
 
-        if (!fortyTwoCache.updatedAt || Date.now() - fortyTwoCache.updatedAt > FORTY_TWO_REFRESH_INTERVAL)
+        if (isFortyTwoCacheStale())
             updateFortyTwoCache();
 
         const fortyTwoText = getFortyTwoText();
