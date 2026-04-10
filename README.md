@@ -9,19 +9,13 @@ Extension GNOME Shell pour afficher votre temps de présence 42 directement dans
 
 ## Sommaire
 
-- [Pourquoi ce projet](#pourquoi-ce-projet)
-- [Features](#features)
-- [Flow technique](#flow-technique)
-- [Architecture actuelle](#architecture-actuelle)
+- [Fonctionnalités](#fonctionnalités)
 - [Installation](#installation)
 - [Configuration](#configuration)
-- [Recuperer les tokens OAuth](#recuperer-les-tokens-oauth)
-- [Compatibilite](#compatibilite)
-- [Troubles courants](#troubles-courants)
-- [Debug](#debug)
-- [Security](#security)
+- [Obtenir les jetons OAuth](#obtenir-les-jetons-oauth)
 - [Roadmap](#roadmap)
-- [FAQ](#faq)
+- [Debug](#debug)
+
 
 ## Preview
 
@@ -95,7 +89,7 @@ Le seul fichier à maintenir :
 ~/.config/angouleme42-widget/config.json
 ```
 
-Un modèle est fourni dans le dépôt (`config.example.json`). Si vous n'avez pas encore les jetons OAuth, consultez la section [Obtenir les jetons OAuth](#recuperer-les-tokens-oauth).
+Un modèle est fourni dans le dépôt (`config.example.json`). Si vous n'avez pas encore les jetons OAuth, consultez la section [Obtenir les jetons OAuth](#obtenir-les-jetons-oauth).
 
 Exemple minimal:
 
@@ -242,7 +236,7 @@ Les contributions sont bienvenues ! Avant de proposer une modification :
 - Testez votre implémentation sur GNOME
 - Décrivez clairement vos changements dans la PR
 
-## FAQ
+## Debug
 
 ### Pourquoi vois-je `42 N/A` ?
 
@@ -252,7 +246,8 @@ Généralement, cela indique une configuration incomplète, un jeton invalide ou
 
 - Confirmez que toutes les clés sont présentes : `login`, `client_id`, `client_secret`, `access_token`, `refresh_token`
 - Commencez par [Configuration](#configuration) si vous n'avez pas rempli le fichier
-- Consultez [Obtenir les jetons OAuth](#recuperer-les-tokens-oauth) si vous manquez d'authentifiants
+- Consultez [Obtenir les jetons OAuth](#obtenir-les-jetons-oauth)
+ si vous manquez d'authentifiants
 
 ### Fonctionne-t-il en dehors du campus ?
 
