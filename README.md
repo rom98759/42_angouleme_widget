@@ -126,7 +126,8 @@ chmod 600 ~/.config/angouleme42-widget/config.json
 
 ## Obtenir les jetons OAuth
 
-> [!WARNING] > **Sécurité** : Garden vos jetons confidentiels. Ne les publiez jamais sur GitHub ou dans un dépôt public.
+> [!WARNING]
+> **Sécurité** : Garden vos jetons confidentiels. Ne les publiez jamais sur GitHub ou dans un dépôt public.
 
 ### Créer une application 42
 
