@@ -8,6 +8,8 @@ const PopupMenu = imports.ui.popupMenu;
 let indicator;
 let panelLabel;
 let timer;
+let retryTimeoutId = null;
+const RETRY_DELAY_SECONDS = 10;
 let menuRows = {};
 
 const LINKS = [
@@ -254,8 +256,8 @@ function formatDuration(seconds) {
 function clearFortyTwoCache() {
     fortyTwoCache.beginAtMs = null;
     fortyTwoCache.endAtMs = null;
-    fortyTwoCache.updatedAt = Date.now();
-    fortyTwoCache.dayKey = getLocalDayKey();
+    fortyTwoCache.updatedAt = 0;
+    fortyTwoCache.dayKey = null;
 }
 
 function isFortyTwoCacheStale() {
@@ -382,8 +384,17 @@ function buildMenu() {
     indicator.menu.removeAll();
     menuRows = {};
 
+    // Time spent at school
     menuRows.duration = createDetailRow('Temps d\'école', '42 N/A');
     indicator.menu.addMenuItem(menuRows.duration.item);
+
+    // Bouton Refresh
+    const refreshItem = new PopupMenu.PopupMenuItem('⟳ Rafraîchir');
+    refreshItem.connect('activate', () => {
+        clearFortyTwoCache();
+        updateWidget();
+    });
+    indicator.menu.addMenuItem(refreshItem);
 
     indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -409,12 +420,29 @@ function updateWidget() {
         if (!indicator)
             return false;
 
-        if (isFortyTwoCacheStale())
+        let apiWasStale = isFortyTwoCacheStale();
+        if (apiWasStale)
             updateFortyTwoCache();
 
         const fortyTwoText = getFortyTwoText();
         panelLabel.set_text(fortyTwoText);
         refreshMenu();
+
+        // rety API
+        if ((fortyTwoText === '42 N/A' || !fortyTwoCache.beginAtMs) && retryTimeoutId === null) {
+            retryTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, RETRY_DELAY_SECONDS, () => {
+                retryTimeoutId = null;
+                clearFortyTwoCache();
+                updateWidget();
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+
+        // stop retrying if API is back
+        if (fortyTwoText !== '42 N/A' && retryTimeoutId !== null) {
+            GLib.source_remove(retryTimeoutId);
+            retryTimeoutId = null;
+        }
 
         return true;
     } catch (error) {
@@ -462,6 +490,10 @@ function disable() {
     if (timer) {
         GLib.source_remove(timer);
         timer = null;
+    }
+    if (retryTimeoutId !== null) {
+        GLib.source_remove(retryTimeoutId);
+        retryTimeoutId = null;
     }
 
     if (indicator) {
