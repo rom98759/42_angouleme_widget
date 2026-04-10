@@ -11,7 +11,6 @@ UUID GNOME: `angouleme42@rcaillie`
 
 <img width="404" height="40" alt="preview widget" src="https://github.com/user-attachments/assets/1b114b3c-1150-4fe7-829e-906d7a2a7e7c" />
 
-
 [Screencast from 04-02-2026 04:04:31 PM.webm](https://github.com/user-attachments/assets/5eafb606-08db-4359-b140-3a3f5d1e5f76)
 
 ## Pourquoi ce projet
@@ -21,19 +20,24 @@ Utile pour suivre ton temps de presence 42 sans ouvrir l'intra. Le widget reste 
 ## Features
 
 - Affichage du temps de presence en temps reel dans le panel GNOME.
-- Rafraichissement automatique du statut toutes les 5 minutes.
+- Appels reseau non bloquants (asynchrones) pour eviter de figer GNOME Shell.
+- Rafraichissement API pilote par cache (5 min) avec tentative immediate au demarrage.
 - Refresh OAuth automatique via `refresh_token` si les identifiants sont valides.
 - Fallback propre vers `42 N/A` si l'API est indisponible ou si la config manque.
+- Backoff exponentiel en cas d'echec reseau (10s -> 20s -> 40s ... jusqu'a 5 min).
+- Bouton `Rafraichir` qui force une tentative immediate (bypass backoff).
 - Menu contextuel avec liens utiles vers les services 42 Angouleme.
 - Stockage local de la configuration OAuth dans `~/.config/angouleme42-widget/config.json`.
 
 ## Flow technique
 
 1. L'extension lit la config locale au demarrage.
-2. Si besoin, elle renouvelle le token OAuth via l'endpoint 42.
-3. Elle appelle `/v2/users/<login>/locations?sort=-begin_at&per_page=1`.
-4. Elle calcule la duree de presence a partir de `begin_at` et `end_at`.
-5. Elle affiche le resultat dans le panel et dans le menu GNOME.
+2. L'UI se met a jour depuis le cache local, sans bloquer le thread GNOME.
+3. Si besoin, elle renouvelle le token OAuth via l'endpoint 42.
+4. Elle appelle `/v2/users/<login>/locations?sort=-begin_at&per_page=1` en asynchrone.
+5. En cas d'echec, elle applique un backoff exponentiel avant la tentative suivante.
+6. Elle calcule la duree de presence a partir de `begin_at` et `end_at`.
+7. Elle affiche le resultat dans le panel et dans le menu GNOME.
 
 ## Architecture actuelle
 
@@ -148,7 +152,8 @@ L'extension calcule `expires_at` automatiquement si besoin (`created_at + expire
 - `42 N/A` en permanence: verifier `fortyTwoLogin`, `access_token` et `refresh_token`.
 - Rien n'apparait dans le panel: verifier que l'extension est bien active avec `gnome-extensions info angouleme42@rcaillie`.
 - Rafraichissement impossible: le `client_secret` ou le `refresh_token` est probablement invalide.
-- API 42 down: le widget revient volontairement sur `42 N/A` plutot que de bloquer GNOME.
+- API 42 down: le widget revient volontairement sur `42 N/A` plutot que de bloquer GNOME, puis retente automatiquement avec backoff.
+- Apres un echec API, une nouvelle tentative peut etre differee (jusqu'a 5 min max): utilise `Rafraichir` pour forcer un essai immediat.
 
 ## Debug
 
@@ -186,6 +191,7 @@ curl -H "Authorization: Bearer XXX" \
 - [ ] Logging d'erreurs dans un fichier local pour faciliter le debug
 - [ ] Panneau de parametres GNOME
 - [ ] Messages d'erreur plus explicites dans l'UI
+- [ ] Afficher le delai de backoff restant dans le menu
 
 ## Contribuer
 

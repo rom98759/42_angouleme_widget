@@ -1,4 +1,4 @@
-const { St, Clutter, GLib } = imports.gi;
+const { St, Clutter, GLib, Gio } = imports.gi;
 const ByteArray = imports.byteArray;
 const ExtensionUtils = imports.misc.extensionUtils;
 const Main = imports.ui.main;
@@ -8,9 +8,10 @@ const PopupMenu = imports.ui.popupMenu;
 let indicator;
 let panelLabel;
 let timer;
-let retryTimeoutId = null;
-const RETRY_DELAY_SECONDS = 10;
 let menuRows = {};
+let isApiRequestInFlight = false;
+let apiBackoffUntilMs = 0;
+let apiBackoffSeconds = 10;
 
 const LINKS = [
     {
@@ -36,6 +37,8 @@ const CONFIG_DIR_NAME = 'angouleme42-widget';
 const FORTY_TWO_REFRESH_INTERVAL = 5 * 60 * 1000;
 const TOKEN_REFRESH_MARGIN_SECONDS = 60;
 const FORTY_TWO_TOKEN_ENDPOINT = 'https://api.intra.42.fr/oauth/token';
+const API_BACKOFF_INITIAL_SECONDS = 10;
+const API_BACKOFF_MAX_SECONDS = 5 * 60;
 let fortyTwoCache = {
     beginAtMs: null,
     endAtMs: null,
@@ -95,16 +98,41 @@ function getLocalExtensionConfigPath() {
     }
 }
 
-function runCommand(command) {
-    try {
-        let [ok, stdout] = GLib.spawn_command_line_sync(command);
-        if (!ok || !stdout)
-            return null;
+function runCommandAsync(argv) {
+    return new Promise((resolve) => {
+        try {
+            const process = Gio.Subprocess.new(
+                argv,
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            );
 
-        return ByteArray.toString(stdout).trim();
-    } catch (error) {
-        return null;
-    }
+            process.communicate_utf8_async(null, null, (proc, result) => {
+                try {
+                    const [, stdout, stderr] = proc.communicate_utf8_finish(result);
+                    resolve({
+                        success: proc.get_successful(),
+                        status: proc.get_exit_status(),
+                        stdout: (stdout || '').trim(),
+                        stderr: (stderr || '').trim(),
+                    });
+                } catch (error) {
+                    resolve({
+                        success: false,
+                        status: -1,
+                        stdout: '',
+                        stderr: error.message || String(error),
+                    });
+                }
+            });
+        } catch (error) {
+            resolve({
+                success: false,
+                status: -1,
+                stdout: '',
+                stderr: error.message || String(error),
+            });
+        }
+    });
 }
 
 function readJsonFile(pathParts) {
@@ -168,7 +196,7 @@ function getConfigValue(config, ...keys) {
     return null;
 }
 
-function refreshTokenIfNeeded() {
+async function refreshTokenIfNeeded() {
     const config = loadConfig();
     const login = getConfigValue(config, 'fortyTwoLogin', 'login') || GLib.getenv('USER') || GLib.get_user_name();
 
@@ -207,14 +235,36 @@ function refreshTokenIfNeeded() {
     if (currentToken && hasValidExpiry && now < expiresAt - TOKEN_REFRESH_MARGIN_SECONDS)
         return { token: currentToken, login };
 
-    const command = `bash -lc "curl -fsS --connect-timeout 3 --max-time 8 -X POST ${GLib.shell_quote(FORTY_TWO_TOKEN_ENDPOINT)} -H 'Content-Type: application/x-www-form-urlencoded' -d ${GLib.shell_quote('grant_type=refresh_token')} -d ${GLib.shell_quote(`client_id=${clientId}`)} -d ${GLib.shell_quote(`client_secret=${clientSecret}`)} -d ${GLib.shell_quote(`refresh_token=${refreshToken}`)}"`;
-    const output = runCommand(command);
+    const result = await runCommandAsync([
+        'curl',
+        '-fsS',
+        '--connect-timeout',
+        '3',
+        '--max-time',
+        '8',
+        '-X',
+        'POST',
+        FORTY_TWO_TOKEN_ENDPOINT,
+        '-H',
+        'Content-Type: application/x-www-form-urlencoded',
+        '-d',
+        'grant_type=refresh_token',
+        '-d',
+        `client_id=${clientId}`,
+        '-d',
+        `client_secret=${clientSecret}`,
+        '-d',
+        `refresh_token=${refreshToken}`,
+    ]);
 
-    if (!output)
+    if (!result.success || !result.stdout) {
+        if (result.stderr)
+            log(`${EXTENSION_LABEL}: token refresh failed (${result.status}) ${result.stderr}`);
         return { token: currentToken, login };
+    }
 
     try {
-        const data = JSON.parse(output);
+        const data = JSON.parse(result.stdout);
         if (!data || !data.access_token)
             return { token: currentToken, login };
 
@@ -260,6 +310,20 @@ function clearFortyTwoCache() {
     fortyTwoCache.dayKey = null;
 }
 
+function clearApiBackoff() {
+    apiBackoffUntilMs = 0;
+    apiBackoffSeconds = API_BACKOFF_INITIAL_SECONDS;
+}
+
+function registerApiFailure() {
+    apiBackoffUntilMs = Date.now() + apiBackoffSeconds * 1000;
+    apiBackoffSeconds = Math.min(apiBackoffSeconds * 2, API_BACKOFF_MAX_SECONDS);
+}
+
+function isInApiBackoffWindow() {
+    return Date.now() < apiBackoffUntilMs;
+}
+
 function isFortyTwoCacheStale() {
     if (!fortyTwoCache.updatedAt)
         return true;
@@ -270,30 +334,41 @@ function isFortyTwoCacheStale() {
     return Date.now() - fortyTwoCache.updatedAt > FORTY_TWO_REFRESH_INTERVAL;
 }
 
-function updateFortyTwoCache() {
-    const credentials = refreshTokenIfNeeded();
+async function updateFortyTwoCache() {
+    const credentials = await refreshTokenIfNeeded();
     const token = credentials.token;
     const login = credentials.login;
 
     if (!token || !login) {
         clearFortyTwoCache();
-        return;
+        return false;
     }
 
     const url = `https://api.intra.42.fr/v2/users/${encodeURIComponent(login)}/locations?sort=-begin_at&per_page=1`;
-    const command = `bash -lc "curl -fsS --connect-timeout 3 --max-time 5 -H ${GLib.shell_quote(`Authorization: Bearer ${token}`)} ${GLib.shell_quote(url)}"`;
-    const output = runCommand(command);
+    const result = await runCommandAsync([
+        'curl',
+        '-fsS',
+        '--connect-timeout',
+        '3',
+        '--max-time',
+        '5',
+        '-H',
+        `Authorization: Bearer ${token}`,
+        url,
+    ]);
 
-    if (!output) {
+    if (!result.success || !result.stdout) {
+        if (result.stderr)
+            log(`${EXTENSION_LABEL}: locations fetch failed (${result.status}) ${result.stderr}`);
         clearFortyTwoCache();
-        return;
+        return false;
     }
 
     try {
-        const locations = JSON.parse(output);
+        const locations = JSON.parse(result.stdout);
         if (!locations || !locations.length) {
             clearFortyTwoCache();
-            return;
+            return false;
         }
 
         const location = locations[0];
@@ -302,15 +377,51 @@ function updateFortyTwoCache() {
 
         if (Number.isNaN(beginAt) || (endAt !== null && Number.isNaN(endAt))) {
             clearFortyTwoCache();
-            return;
+            return false;
         }
 
         fortyTwoCache.beginAtMs = beginAt;
         fortyTwoCache.endAtMs = endAt;
         fortyTwoCache.updatedAt = Date.now();
         fortyTwoCache.dayKey = getLocalDayKey(fortyTwoCache.updatedAt);
+        return true;
     } catch (error) {
         clearFortyTwoCache();
+        return false;
+    }
+}
+
+function refreshDisplayFromCache() {
+    const fortyTwoText = getFortyTwoText();
+    panelLabel.set_text(fortyTwoText);
+    refreshMenu();
+}
+
+async function refreshFortyTwoDataIfNeeded(force = false) {
+    if (isApiRequestInFlight)
+        return;
+
+    if (!force && !isFortyTwoCacheStale())
+        return;
+
+    if (!force && isInApiBackoffWindow())
+        return;
+
+    isApiRequestInFlight = true;
+
+    try {
+        const success = await updateFortyTwoCache();
+        if (success)
+            clearApiBackoff();
+        else
+            registerApiFailure();
+    } catch (error) {
+        logError(error, `${EXTENSION_LABEL}: data refresh failed`);
+        registerApiFailure();
+    } finally {
+        isApiRequestInFlight = false;
+        if (indicator && panelLabel)
+            refreshDisplayFromCache();
     }
 }
 
@@ -392,7 +503,9 @@ function buildMenu() {
     const refreshItem = new PopupMenu.PopupMenuItem('⟳ Rafraîchir');
     refreshItem.connect('activate', () => {
         clearFortyTwoCache();
+        clearApiBackoff();
         updateWidget();
+        void refreshFortyTwoDataIfNeeded(true);
     });
     indicator.menu.addMenuItem(refreshItem);
 
@@ -420,29 +533,8 @@ function updateWidget() {
         if (!indicator)
             return false;
 
-        let apiWasStale = isFortyTwoCacheStale();
-        if (apiWasStale)
-            updateFortyTwoCache();
-
-        const fortyTwoText = getFortyTwoText();
-        panelLabel.set_text(fortyTwoText);
-        refreshMenu();
-
-        // rety API
-        if ((fortyTwoText === '42 N/A' || !fortyTwoCache.beginAtMs) && retryTimeoutId === null) {
-            retryTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, RETRY_DELAY_SECONDS, () => {
-                retryTimeoutId = null;
-                clearFortyTwoCache();
-                updateWidget();
-                return GLib.SOURCE_REMOVE;
-            });
-        }
-
-        // stop retrying if API is back
-        if (fortyTwoText !== '42 N/A' && retryTimeoutId !== null) {
-            GLib.source_remove(retryTimeoutId);
-            retryTimeoutId = null;
-        }
+        refreshDisplayFromCache();
+        void refreshFortyTwoDataIfNeeded(false);
 
         return true;
     } catch (error) {
@@ -479,8 +571,8 @@ function enable() {
         logError(error, `${EXTENSION_LABEL}: menu init failed`);
     }
 
-    updateFortyTwoCache();
     updateWidget();
+    void refreshFortyTwoDataIfNeeded(true);
 
     Main.panel.addToStatusArea('angouleme42-indicator', indicator);
     timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, updateWidget);
@@ -491,11 +583,6 @@ function disable() {
         GLib.source_remove(timer);
         timer = null;
     }
-    if (retryTimeoutId !== null) {
-        GLib.source_remove(retryTimeoutId);
-        retryTimeoutId = null;
-    }
-
     if (indicator) {
         indicator.destroy();
         indicator = null;
@@ -503,5 +590,7 @@ function disable() {
 
     panelLabel = null;
     menuRows = {};
+    isApiRequestInFlight = false;
+    clearApiBackoff();
     clearFortyTwoCache();
 }
