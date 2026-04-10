@@ -196,7 +196,7 @@ function getConfigValue(config, key) {
 
 async function refreshTokenIfNeeded() {
     const config = loadConfig();
-    const login = getConfigValue(config, 'fortyTwoLogin') || GLib.getenv('USER') || GLib.get_user_name();
+    const login = getConfigValue(config, 'login') || GLib.getenv('USER') || GLib.get_user_name();
 
     const currentToken = getConfigValue(config, 'access_token');
     const refreshToken = getConfigValue(config, 'refresh_token');

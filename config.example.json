@@ -1,5 +1,5 @@
 {
-    "fortyTwoLogin": "LOGIN_42",
+    "login": "LOGIN_42",
     "client_id": "u-s4t2ud-XXX",
     "client_secret": "s-s4t2ud-XXX",
     "access_token": "XXX",
