@@ -187,37 +187,29 @@ function saveConfig(config) {
     }
 }
 
-function getConfigValue(config, ...keys) {
-    for (const key of keys) {
-        if (config && config[key])
-            return config[key];
-    }
+function getConfigValue(config, key) {
+    if (!config || !key)
+        return null;
 
-    return null;
+    return Object.prototype.hasOwnProperty.call(config, key) ? config[key] : null;
 }
 
 async function refreshTokenIfNeeded() {
     const config = loadConfig();
-    const login = getConfigValue(config, 'fortyTwoLogin', 'login') || GLib.getenv('USER') || GLib.get_user_name();
+    const login = getConfigValue(config, 'fortyTwoLogin') || GLib.getenv('USER') || GLib.get_user_name();
 
-    const currentToken = getConfigValue(config,
-        'access_token',
-        'fortyTwoToken',
-        'accessToken',
-        'token'
-    );
-
-    const refreshToken = getConfigValue(config, 'refresh_token', 'refreshToken');
-    const clientId = getConfigValue(config, 'client_id', 'clientId');
-    const clientSecret = getConfigValue(config, 'client_secret', 'clientSecret');
+    const currentToken = getConfigValue(config, 'access_token');
+    const refreshToken = getConfigValue(config, 'refresh_token');
+    const clientId = getConfigValue(config, 'client_id');
+    const clientSecret = getConfigValue(config, 'client_secret');
 
     if (!refreshToken || !clientId || !clientSecret)
         return { token: currentToken, login };
 
     const now = Math.floor(Date.now() / 1000);
-    const expiresAtValue = getConfigValue(config, 'expires_at', 'expiresAt');
-    const createdAtValue = getConfigValue(config, 'created_at', 'createdAt');
-    const expiresInConfigValue = getConfigValue(config, 'expires_in', 'expiresIn');
+    const expiresAtValue = getConfigValue(config, 'expires_at');
+    const createdAtValue = getConfigValue(config, 'created_at');
+    const expiresInConfigValue = getConfigValue(config, 'expires_in');
 
     const explicitExpiresAt = Number.parseInt(String(expiresAtValue || ''), 10);
     const createdAt = Number.parseInt(String(createdAtValue || ''), 10);
@@ -280,9 +272,6 @@ async function refreshTokenIfNeeded() {
         config.created_at = createdAtSafe;
         config.expires_in = expiresIn;
         config.expires_at = createdAtSafe + expiresIn;
-
-        // Keep backward-compatible fields so older config consumers still work.
-        config.fortyTwoToken = data.access_token;
 
         saveConfig(config);
 
@@ -495,11 +484,9 @@ function buildMenu() {
     indicator.menu.removeAll();
     menuRows = {};
 
-    // Time spent at school
     menuRows.duration = createDetailRow('Temps d\'école', '42 N/A');
     indicator.menu.addMenuItem(menuRows.duration.item);
 
-    // Bouton Refresh
     const refreshItem = new PopupMenu.PopupMenuItem('⟳ Rafraîchir');
     refreshItem.connect('activate', () => {
         clearFortyTwoCache();
